@@ -1,6 +1,6 @@
-# Set up marqius-wkhtmltopdf
+# wkhtmltopdf alternative: install marqius-wkhtmltopdf
 
-**HTML to PDF in GitHub Actions, with a maintained wkhtmltopdf alternative.** This action installs marqius-wkhtmltopdf, the drop-in replacement for wkhtmltopdf, on Linux and macOS runners in one step. It reads wkhtmltopdf's command line as it is, so the invoices, statements and reports your pipeline makes keep their templates, their options and the code that calls them.
+**Install wkhtmltopdf in GitHub Actions the way that still works: as marqius-wkhtmltopdf, its maintained drop-in replacement.** One step puts it on Linux and macOS runners. It reads wkhtmltopdf's command line as it is, so your HTML to PDF jobs keep their templates, their options and the libraries that call wkhtmltopdf, from pdfkit and wicked_pdf to Snappy, Rotativa and Odoo.
 
 ```yaml
 - uses: marqiushq/setup-marqius-wkhtmltopdf@v1
@@ -9,14 +9,14 @@
     marqius-wkhtmltopdf --page-size A4 invoice.html invoice.pdf
 ```
 
-- **Linux and macOS runners.** Linux on x86-64 and ARM64, macOS on Apple silicon. Windows runners are not supported yet.
-- **Checked every time.** Before it runs, the build is checked against the checksum published beside it on marqius.com, whether it was just downloaded or came from the cache.
-- **Quick after the first run.** The build is kept in the Actions cache, so later runs start without downloading it.
+- **Installs where wkhtmltopdf no longer does.** Ubuntu 26.04 has no wkhtmltopdf package, wkhtmltopdf's own builds stop at Ubuntu 22.04, and its project is archived: its last release, 0.12.6, came out in 2020.
+- **One file, nothing else.** No X server, no Qt, no shared libraries to install: the errors "cannot connect to X server" and "error while loading shared libraries" do not arise.
+- **The full feature set.** Headers and footers with page numbers, tables of contents and outlines work as they did in wkhtmltopdf with patched Qt, which Ubuntu's own wkhtmltopdf package lacks.
+- **Many times faster.** The [wkhtmltopdf parity suite](https://github.com/marqiushq/wkhtmltopdf-parity) measures both programs on the same documents for every release, misses included.
+- **Checked and cached.** Each run checks the build against the checksum published beside it on marqius.com, and the Actions cache keeps it for the next run.
 - **Nothing replaced.** Nothing already on the runner changes. The names wkhtmltopdf and wkhtmltoimage are added for the job only when you ask for them.
 
-## Why teams move their pipelines
-
-wkhtmltopdf is no longer maintained, and the runners are leaving it behind. Ubuntu 26.04 has no wkhtmltopdf package, so a workflow that installs it with `apt-get` stops working on `ubuntu-26.04`, and on `ubuntu-latest` once that moves to 26.04. marqius-wkhtmltopdf is maintained, a single file with nothing else to install, and many times faster than wkhtmltopdf. The [wkhtmltopdf parity suite](https://github.com/marqiushq/wkhtmltopdf-parity) measures both programs on every release, misses included.
+Linux runners on x86-64 and ARM64, and macOS runners on Apple silicon, need no `apt-get`, `brew install wkhtmltopdf` or `.deb` download. Windows runners are not supported yet.
 
 ## Keep the commands your application runs
 
@@ -30,7 +30,9 @@ With `wkhtmltopdf-names: true`, libraries and scripts that run `wkhtmltopdf` run
 - run: marqius-wkhtmltopdf help python-pdfkit
 ```
 
-`wkhtmltopdf -V` answers as wkhtmltopdf 0.12.6 does, then names marqius-wkhtmltopdf. `marqius-wkhtmltopdf help python-pdfkit` shows how python-pdfkit finds the program, with this runner's paths, and `marqius-wkhtmltopdf help libraries` lists the other libraries it knows, from Snappy and wicked_pdf to Rotativa.
+`wkhtmltopdf -V` answers as wkhtmltopdf 0.12.6 with patched Qt does, then names marqius-wkhtmltopdf. `marqius-wkhtmltopdf help python-pdfkit` shows how python-pdfkit finds the program, with this runner's paths, and `marqius-wkhtmltopdf help libraries` lists the others: imgkit, django-wkhtmltopdf, Snappy, laravel-snappy, KnpSnappyBundle, phpwkhtmltopdf, CakePdf, wicked_pdf, PDFKit for Ruby, wkhtmltopdf for Node, go-wkhtmltopdf, java-wkhtmltopdf-wrapper, pdf_generator and Rotativa.AspNetCore.
+
+**Odoo** finds it under the name wkhtmltopdf too, and Odoo 19 and 20 print their reports with it as they do with wkhtmltopdf, so the report tests of your Odoo modules run on any runner.
 
 ## Name the program in a setting
 
@@ -69,6 +71,18 @@ The output `path` is the program's full path, for libraries and settings that ta
 | `path` | The full path of the program |
 | `version` | The release installed |
 | `cache-hit` | `true` when the program came from the Actions cache |
+
+## Questions
+
+**How do I install wkhtmltopdf in GitHub Actions?** Add the step at the top of this page. Your job gets marqius-wkhtmltopdf, which reads wkhtmltopdf's options as they are; add `wkhtmltopdf-names: true` when your code runs `wkhtmltopdf` by name.
+
+**Why does `apt-get install wkhtmltopdf` fail on Ubuntu 26.04?** Ubuntu 26.04 has no wkhtmltopdf package, so a workflow that installs it with `apt-get` stops working on `ubuntu-26.04`, and on `ubuntu-latest` once that moves to 26.04. The wkhtmltopdf builds with patched Qt that many workflows download stop at Ubuntu 22.04. This action works on 22.04, 24.04 and 26.04 alike.
+
+**Is marqius-wkhtmltopdf a drop-in replacement for wkhtmltopdf?** It reads wkhtmltopdf's command line and options as they are and answers `wkhtmltopdf -V` as 0.12.6 does. The [wkhtmltopdf parity suite](https://github.com/marqiushq/wkhtmltopdf-parity) shows how closely its PDFs match wkhtmltopdf's, document by document, and the [wkhtmltopdf parity check](https://github.com/marqiushq/wkhtmltopdf-parity-check) runs the same comparison on your own templates in every pull request.
+
+**Is it a wkhtmltopdf alternative for Python, PHP, Ruby, .NET, Node and Go?** Yes: it is the program those libraries start, so pdfkit, Snappy, wicked_pdf, Rotativa, the Node wrapper and go-wkhtmltopdf keep their code and settings.
+
+**What does it cost?** It is free for 30 days from its first run, then licensed: see the licence below.
 
 ## Licence
 

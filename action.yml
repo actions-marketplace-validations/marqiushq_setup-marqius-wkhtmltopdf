@@ -1,5 +1,5 @@
-name: Set up marqius-wkhtmltopdf
-description: "HTML to PDF in GitHub Actions: install marqius-wkhtmltopdf, the drop-in wkhtmltopdf replacement, verified and cached"
+name: "wkhtmltopdf alternative: install marqius-wkhtmltopdf"
+description: "Install wkhtmltopdf's maintained drop-in replacement in GitHub Actions: HTML to PDF on Linux and macOS, verified and cached"
 author: Simple AI LLC
 branding:
   icon: file-text
