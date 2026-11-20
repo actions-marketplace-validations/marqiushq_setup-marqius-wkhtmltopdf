@@ -1,0 +1,257 @@
+# Tests the action on every kind of runner it supports, and runs the README's examples as printed:
+#
+#   on a push or pull request   this commit's action, with the latest release of marqius-wkhtmltopdf
+#   every hour                  the same tests, as soon as marqius.com has a release no run has
+#                               passed yet; a release that passed is remembered in the Actions cache
+#   by hand                     Actions > Test > Run workflow
+#
+# The README's examples use the published v1 of this action; test/readme.py fails the run when an
+# example in the README is missing here.
+name: Test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  release:
+    name: Latest release
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.latest.outputs.version }}
+      test: ${{ steps.decide.outputs.test }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Every example in the README runs here
+        run: python3 test/readme.py README.md .github/workflows/test.yml
+      - id: latest
+        name: The latest release on marqius.com
+        run: |
+          version="$(curl -fsSL --retry 5 --retry-all-errors https://marqius.com/download/marqius-wkhtmltopdf/latest | tr -d '[:space:]')"
+          [[ "$version" =~ ^[0-9]+(\.[0-9]+)+$ ]] || { echo "::error::marqius.com does not say which release is the latest"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "marqius-wkhtmltopdf $version"
+      - id: tested
+        if: github.event_name == 'schedule'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .passed
+          key: passed-${{ steps.latest.outputs.version }}
+          lookup-only: true
+      - id: decide
+        name: Test it now?
+        env:
+          EVENT: ${{ github.event_name }}
+          PASSED: ${{ steps.tested.outputs.cache-hit }}
+          VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          if [ "$EVENT" = schedule ] && [ "$PASSED" = true ]; then
+            echo "marqius-wkhtmltopdf $VERSION has passed already: nothing to test"
+            echo "test=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "test=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  action:
+    name: ${{ matrix.runner }}
+    needs: release
+    if: needs.release.outputs.test == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ubuntu-24.04
+          - ubuntu-22.04
+          - ubuntu-26.04
+          - ubuntu-24.04-arm
+          - ubuntu-22.04-arm
+          - ubuntu-26.04-arm
+          - ubuntu-slim
+          - macos-15
+          - macos-26
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: latest
+        uses: ./
+      - name: The latest release, on the PATH and at the path given
+        shell: bash
+        env:
+          WANT: ${{ needs.release.outputs.version }}
+          VERSION: ${{ steps.latest.outputs.version }}
+          PROGRAM: ${{ steps.latest.outputs.path }}
+          CACHE_HIT: ${{ steps.latest.outputs.cache-hit }}
+        run: bash test/check.sh installed
+      - name: No wkhtmltopdf names, as none were asked for
+        shell: bash
+        run: bash test/check.sh no-names
+      - name: The path runs in PowerShell
+        if: matrix.runner != 'ubuntu-slim'
+        shell: pwsh
+        env:
+          PROGRAM: ${{ steps.latest.outputs.path }}
+          VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          $said = & $env:PROGRAM --version
+          if ($said -ne "marqius-wkhtmltopdf $env:VERSION") { throw "The path runs '$said'" }
+          "$env:PROGRAM runs marqius-wkhtmltopdf $env:VERSION"
+      - name: A PDF, a picture and a comparison
+        shell: bash
+        run: bash test/check.sh converts
+      - id: earlier
+        uses: ./
+        with:
+          version: v0.12.8
+          wkhtmltopdf-names: true
+      - name: The release asked for, with the names wkhtmltopdf and wkhtmltoimage
+        shell: bash
+        env:
+          VERSION: ${{ steps.earlier.outputs.version }}
+        run: bash test/check.sh names 0.12.8
+
+  cache:
+    name: From the cache, ${{ matrix.runner }}
+    needs: [release, action]
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: setup
+        uses: ./
+      - name: It came from the Actions cache, checked
+        shell: bash
+        env:
+          CACHE_HIT: ${{ steps.setup.outputs.cache-hit }}
+        run: |
+          [ "$CACHE_HIT" = true ] || { echo "::error::The build was downloaded again rather than taken from the cache"; exit 1; }
+          marqius-wkhtmltopdf --version
+
+  refusals:
+    name: Refuses ${{ matrix.case }}
+    needs: release
+    if: needs.release.outputs.test == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: an Intel Mac
+            runner: macos-15-intel
+            says: the macOS build of marqius-wkhtmltopdf is for Apple silicon
+          - case: Windows, for now
+            runner: windows-2025
+            says: Windows runners are not supported yet
+          - case: a release that does not exist
+            runner: ubuntu-24.04
+            version: 0.0.1
+            says: There is no marqius-wkhtmltopdf 0.0.1
+          - case: a version that is not one
+            runner: ubuntu-24.04
+            version: newest
+            says: version is a release such as 0.12.9, or latest
+          - case: names neither true nor false
+            runner: ubuntu-24.04
+            names: "yes"
+            says: wkhtmltopdf-names is true or false
+          - case: a build that does not match its checksum
+            runner: ubuntu-24.04
+            mirror: true
+            says: does not match the checksum published beside it
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: matrix.mirror
+        name: A mirror whose build has one byte more than its checksum's
+        run: bash test/check.sh mirror "$RUNNER_TEMP/mirror"
+      - id: setup
+        continue-on-error: true
+        uses: ./
+        with:
+          version: ${{ matrix.version || 'latest' }}
+          wkhtmltopdf-names: ${{ matrix.names || 'false' }}
+      - name: Refused, saying why
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.setup.outcome }}
+          INPUT_VERSION: ${{ matrix.version || 'latest' }}
+          INPUT_WKHTMLTOPDF_NAMES: ${{ matrix.names || 'false' }}
+        run: bash test/check.sh refused "${{ matrix.says }}"
+
+  readme:
+    name: README, ${{ matrix.runner }}
+    needs: release
+    if: needs.release.outputs.test == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The first example
+      - uses: marqiushq/setup-marqius-wkhtmltopdf@v1
+      - run: |
+          echo '<h1>Invoice 42</h1><p>Total €1,234.50</p>' > invoice.html
+          marqius-wkhtmltopdf --page-size A4 invoice.html invoice.pdf
+      - shell: bash
+        run: bash test/check.sh pdf invoice.pdf
+      # Keep the commands your application runs
+      - uses: marqiushq/setup-marqius-wkhtmltopdf@v1
+        with:
+          wkhtmltopdf-names: true
+      - run: wkhtmltopdf -V
+      - run: marqius-wkhtmltopdf help python-pdfkit
+      # Name the program in a setting
+      - id: marqius
+        uses: marqiushq/setup-marqius-wkhtmltopdf@v1
+      - shell: bash
+        env:
+          WKHTMLTOPDF_PATH: ${{ steps.marqius.outputs.path }}
+        run: |
+          echo '<p>Statement for March</p>' > statement.html
+          "$WKHTMLTOPDF_PATH" statement.html statement.pdf
+      - shell: bash
+        run: bash test/check.sh pdf statement.pdf
+      # Stay on one release
+      - uses: marqiushq/setup-marqius-wkhtmltopdf@v1
+        with:
+          version: 0.12.9
+      - shell: bash
+        run: '[ "$(marqius-wkhtmltopdf --version)" = "marqius-wkhtmltopdf 0.12.9" ]'
+
+  # The licence example, a job of its own
+  pdf:
+    runs-on: ubuntu-latest
+    env:
+      MARQIUS_LICENCE: ${{ secrets.MARQIUS_LICENCE }}
+    steps:
+      - uses: marqiushq/setup-marqius-wkhtmltopdf@v1
+      - run: marqius-wkhtmltopdf licence
+    name: README, the licence
+    needs: release
+    if: needs.release.outputs.test == 'true'
+
+  passed:
+    name: Remember the release that passed
+    needs: [release, action, cache, refusals, readme, pdf]
+    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "${{ needs.release.outputs.version }}" > .passed
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .passed
+          key: passed-${{ needs.release.outputs.version }}

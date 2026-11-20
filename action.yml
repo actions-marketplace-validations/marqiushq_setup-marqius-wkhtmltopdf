@@ -1,0 +1,62 @@
+name: Set up marqius-wkhtmltopdf
+description: "HTML to PDF in GitHub Actions: install marqius-wkhtmltopdf, the drop-in wkhtmltopdf replacement, verified and cached"
+author: Simple AI LLC
+branding:
+  icon: file-text
+  color: green
+
+inputs:
+  version:
+    description: "The release of marqius-wkhtmltopdf to install, such as 0.12.9, or latest"
+    required: false
+    default: latest
+  wkhtmltopdf-names:
+    description: "true also gives it the names wkhtmltopdf and wkhtmltoimage for the rest of the job, so that libraries and scripts that run wkhtmltopdf run it"
+    required: false
+    default: "false"
+
+outputs:
+  path:
+    description: "The full path of the marqius-wkhtmltopdf program"
+    value: ${{ steps.install.outputs.path }}
+  version:
+    description: "The release installed, such as 0.12.9"
+    value: ${{ steps.plan.outputs.version }}
+  cache-hit:
+    description: "true when the program came from the Actions cache rather than from marqius.com"
+    value: ${{ steps.restore.outputs.cache-hit == 'true' }}
+
+runs:
+  using: composite
+  steps:
+    - id: plan
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/setup.sh" plan
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_WKHTMLTOPDF_NAMES: ${{ inputs.wkhtmltopdf-names }}
+
+    - id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.plan.outputs.folder }}
+        key: ${{ steps.plan.outputs.key }}
+
+    - id: install
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/setup.sh" install
+      env:
+        INPUT_WKHTMLTOPDF_NAMES: ${{ inputs.wkhtmltopdf-names }}
+        PLAN_VERSION: ${{ steps.plan.outputs.version }}
+        PLAN_FILE: ${{ steps.plan.outputs.file }}
+        PLAN_PROGRAM: ${{ steps.plan.outputs.program }}
+        PLAN_SHA256: ${{ steps.plan.outputs.sha256 }}
+        PLAN_FOLDER: ${{ steps.plan.outputs.folder }}
+        CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
+
+    # saved at once, so that the next run finds it even if a later step of this job fails
+    - if: steps.install.outputs.downloaded == 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.plan.outputs.folder }}
+        key: ${{ steps.plan.outputs.key }}
