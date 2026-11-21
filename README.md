@@ -94,7 +94,7 @@ The output `path` is the program's full path, for libraries and settings that ta
 
 ## Licence
 
-marqius-wkhtmltopdf is commercial software from Simple AI LLC, with a 30-day free trial counted from its first run. After the trial, without a licence, each page carries one line saying the copy is unlicensed; it never stops making PDFs. Keep your licence in a secret named `MARQIUS_LICENCE`, for the repository or the organisation, and give it to the job:
+marqius-wkhtmltopdf is commercial software from Simple AI LLC, with a 30-day free trial counted from its first run. After the trial, without a licence, each page carries one line, “Prepared by Marqius, Purchase Licence”; it never stops making PDFs. Keep your licence in a secret named `MARQIUS_LICENCE`, for the repository or the organisation, and give it to the job:
 
 ```yaml
 pdf:
