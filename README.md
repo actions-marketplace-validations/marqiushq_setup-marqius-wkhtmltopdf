@@ -1,6 +1,10 @@
-# wkhtmltopdf alternative: install marqius-wkhtmltopdf
+# wkhtmltopdf alternative for GitHub Actions: install marqius-wkhtmltopdf
 
-**Install wkhtmltopdf in GitHub Actions the way that still works: as marqius-wkhtmltopdf, its maintained drop-in replacement.** One step puts it on Linux and macOS runners. It reads wkhtmltopdf's command line as it is, so your HTML to PDF jobs keep their templates, their options and the libraries that call wkhtmltopdf, from pdfkit and wicked_pdf to Snappy, Rotativa and Odoo.
+**What it is.** A GitHub Action that installs marqius-wkhtmltopdf, the maintained drop-in replacement for wkhtmltopdf, on your runner in one step.
+
+**Why it matters.** Many workflows make PDFs after `apt-get install wkhtmltopdf`. That stops working on Ubuntu 26.04, which has no wkhtmltopdf package, and on `ubuntu-latest` once it moves there. This step works on every Ubuntu runner and on macOS, and your templates, options and libraries stay exactly as they are.
+
+## Use it
 
 ```yaml
 - uses: marqiushq/setup-marqius-wkhtmltopdf@v1
@@ -8,6 +12,10 @@
     echo '<h1>Invoice 42</h1><p>Total €1,234.50</p>' > invoice.html
     marqius-wkhtmltopdf --page-size A4 invoice.html invoice.pdf
 ```
+
+The first step installs the program; the second makes a PDF with it, using the same options wkhtmltopdf takes.
+
+## What you get
 
 - **Installs where wkhtmltopdf no longer does.** Ubuntu 26.04 has no wkhtmltopdf package, wkhtmltopdf's own builds stop at Ubuntu 22.04, and its project is archived: its last release, 0.12.6, came out in 2020.
 - **One file, nothing else.** No X server, no Qt, no shared libraries to install: the errors "cannot connect to X server" and "error while loading shared libraries" do not arise.
