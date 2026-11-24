@@ -228,9 +228,49 @@ jobs:
       # Stay on one release
       - uses: marqiushq/setup-marqius-wkhtmltopdf@v1
         with:
-          version: 0.12.9
+          version: 0.12.15
       - shell: bash
-        run: '[ "$(marqius-wkhtmltopdf --version)" = "marqius-wkhtmltopdf 0.12.9" ]'
+        run: '[ "$(marqius-wkhtmltopdf --version)" = "marqius-wkhtmltopdf 0.12.15" ]'
+      # Is it safe? 6: the action pinned to v1.0.0's commit, and the program to a release
+      - uses: marqiushq/setup-marqius-wkhtmltopdf@1a2e953786932b9b94679a4aa251cf29f3b39bad # v1.0.0
+        with:
+          version: 0.12.15
+      - shell: bash
+        run: '[ "$(marqius-wkhtmltopdf --version)" = "marqius-wkhtmltopdf 0.12.15" ]'
+
+  # Is it safe? 5: the program's provenance, checked with GitHub's record (a job of its own)
+  provenance:
+    name: README, provenance, ${{ matrix.runner }}
+    needs: release
+    if: needs.release.outputs.test == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - id: marqius
+        uses: marqiushq/setup-marqius-wkhtmltopdf@v1
+      - name: Check that GitHub built this program
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROGRAM: ${{ steps.marqius.outputs.path }}
+        run: gh attestation verify "$PROGRAM" -R marqiushq/marqius-wkhtmltopdf
+      - name: The README's two commands, as printed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsSLO https://marqius.com/download/marqius-wkhtmltopdf/0.12.15/marqius-wkhtmltopdf-linux-x86_64
+          gh attestation verify marqius-wkhtmltopdf-linux-x86_64 -R marqiushq/marqius-wkhtmltopdf
+      - name: A changed copy fails the check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp marqius-wkhtmltopdf-linux-x86_64 changed && printf x >> changed
+          if gh attestation verify changed -R marqiushq/marqius-wkhtmltopdf; then echo "::error::A changed copy passed the check"; exit 1; fi
+          echo "A changed copy fails the check, as it should"
 
   # The licence example, a job of its own
   pdf:
@@ -246,7 +286,7 @@ jobs:
 
   passed:
     name: Remember the release that passed
-    needs: [release, action, cache, refusals, readme, pdf]
+    needs: [release, action, cache, refusals, readme, provenance, pdf]
     if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
     steps:
